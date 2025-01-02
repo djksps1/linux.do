@@ -23,18 +23,9 @@ HOME_URL = "https://linux.do/"
 class LinuxDoBrowser:
     def __init__(self) -> None:
         self.pw = sync_playwright().start()
-        # 增加超时设置和其他浏览器选项
-        self.browser = self.pw.firefox.launch(
-            headless=True,
-            args=['--disable-dev-shm-usage']  # 防止内存问题
-        )
-        self.context = self.browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        )
+        self.browser = self.pw.firefox.launch(headless=True)
+        self.context = self.browser.new_context()
         self.page = self.context.new_page()
-        # 设置更长的超时时间（90秒）
-        self.page.set_default_timeout(90000)
         self.page.goto(HOME_URL)
 
     def login(self):
@@ -60,68 +51,45 @@ class LinuxDoBrowser:
         time.sleep(2)  # 等待加载新内容
 
     def click_topic(self):
-        max_browse_count = 500
-        browsed_topics = []
+        max_browse_count = 500  # 希望浏览的帖子数
+        browsed_topics = []  # 存储浏览的帖子
         total_count = 0
-        retry_count = 3  # 添加重试次数
 
         while total_count < max_browse_count:
-            try:
-                time.sleep(5)
-                topics = self.page.query_selector_all("#list-area .title")
+            time.sleep(5)  # 确保页面加载完成
+            topics = self.page.query_selector_all("#list-area .title")
 
-                if not topics:
-                    print("未找到任何帖子，请检查选择器或页面加载情况。")
+            if not topics:
+                print("未找到任何帖子，请检查选择器或页面加载情况。")
+                break
+
+            # 排除已经浏览过的帖子
+            new_topics = [t for t in topics if t not in browsed_topics]
+            browsed_topics.extend(new_topics)
+
+            if not new_topics:
+                print("没有加载出更多帖子。")
+                break
+
+            for topic in new_topics:
+                if total_count >= max_browse_count:
                     break
 
-                new_topics = [t for t in topics if t not in browsed_topics]
-                browsed_topics.extend(new_topics)
+                page = self.context.new_page()
+                page.goto(HOME_URL + topic.get_attribute("href"))
+                time.sleep(3)
+                
+                if random.random() < 0.02:  # 保持 2% 点赞几率
+                    self.click_like(page)
 
-                if not new_topics:
-                    print("没有加载出更多帖子。")
-                    break
+                total_count += 1
+                time.sleep(3)
+                page.close()
 
-                for topic in new_topics:
-                    if total_count >= max_browse_count:
-                        break
+            print(f"已浏览 {total_count} 个帖子")
 
-                    try:
-                        page = self.context.new_page()
-                        page.set_default_timeout(90000)  # 为新页面也设置更长的超时时间
-                        
-                        for _ in range(retry_count):
-                            try:
-                                url = HOME_URL + topic.get_attribute("href")
-                                page.goto(url)
-                                break
-                            except Exception as e:
-                                print(f"访问帖子失败，正在重试... 错误: {str(e)}")
-                                time.sleep(5)
-                        
-                        time.sleep(3)
-                        
-                        if random.random() < 0.02:
-                            try:
-                                self.click_like(page)
-                            except Exception as e:
-                                print(f"点赞失败: {str(e)}")
-
-                        total_count += 1
-                        print(f"已浏览 {total_count} 个帖子")
-                        
-                    except Exception as e:
-                        print(f"处理帖子时出错: {str(e)}")
-                    finally:
-                        try:
-                            page.close()
-                        except:
-                            pass
-
-                self.scroll_down()
-
-            except Exception as e:
-                print(f"浏览帖子过程中出错: {str(e)}")
-                time.sleep(10)  # 出错后等待一段时间再继续
+            # 滚动以加载更多内容
+            self.scroll_down()
 
         print(f"总共浏览了 {total_count} 个帖子")
 
@@ -184,13 +152,6 @@ class LinuxDoBrowser:
             print(f"邮件发送失败: {str(e)}")
         
         page.close()
-
-    def __del__(self):
-        try:
-            self.browser.close()
-            self.pw.stop()
-        except:
-            pass
 
 if __name__ == "__main__":
     required_env_vars = {
