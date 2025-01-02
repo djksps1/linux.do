@@ -9,7 +9,7 @@ from playwright.sync_api import sync_playwright
 
 # 邮件配置从环境变量获取
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.qq.com")  # QQ邮箱SMTP服务器
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))  # QQ邮箱SMTP端口
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "465"))  # QQ邮箱SMTP端口
 SMTP_USER = os.environ.get("SMTP_USER")  # QQ邮箱账号
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")  # QQ邮箱授权码
 RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL")  # 接收通知的邮箱
