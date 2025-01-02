@@ -3,7 +3,6 @@ name: Linux.do Auto Checkin
 on:
   schedule:
     - cron: '0 1 * * *'   # 北京时间 9:00
-    - cron: '0 5 * * *'   # 北京时间 13:00
   workflow_dispatch:      # 支持手动触发
 
 jobs:
@@ -26,10 +25,18 @@ jobs:
         playwright install firefox
     
     - name: Run checkin script
+      timeout-minutes: 30  # 设置任务超时时间为30分钟
       env:
         USERNAME: ${{ secrets.USERNAME }}
         PASSWORD: ${{ secrets.PASSWORD }}
         SMTP_USER: ${{ secrets.SMTP_USER }}
         SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
         RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
-      run: python main.py
+      run: |
+        # 添加重试机制
+        for i in 1 2 3; do
+          python main.py && break || {
+            echo "尝试 $i 失败，等待重试..."
+            sleep 30
+          }
+        done 
