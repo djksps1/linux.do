@@ -1,14 +1,18 @@
 import os
 import time
 import random
-import requests
-from tabulate import tabulate
-
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.header import Header
 from playwright.sync_api import sync_playwright
 
-# 设置 PushPlus 的 Token 和发送请求的 URL
-PUSHPLUS_TOKEN = os.environ.get("PUSHTOKEN")
-url_pushplus = 'http://www.pushplus.plus/send'
+# 邮件配置从环境变量获取
+SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.qq.com")  # QQ邮箱SMTP服务器
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "465"))  # QQ邮箱SMTP端口
+SMTP_USER = os.environ.get("SMTP_USER")  # QQ邮箱账号
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")  # QQ邮箱授权码
+RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL")  # 接收通知的邮箱
 
 # 用户名和密码从环境变量中获取
 USERNAME = os.environ.get("USERNAME")
@@ -114,8 +118,7 @@ class LinuxDoBrowser:
                 requirement = cells[2].text_content().strip()
                 info.append([project, current, requirement])
 
-        # 使用 HTML 表格格式化数据，包含标题
-
+        # 使用 HTML 表格格式化数据
         html_table = "<table style='border-collapse: collapse; width: 100%; border: 1px solid black;'>"
         html_table += "<caption>在过去 100 天内：</caption>"
         html_table += "<tr><th style='border: 1px solid black; padding: 8px;'>项目</th><th style='border: 1px solid black; padding: 8px;'>当前</th><th style='border: 1px solid black; padding: 8px;'>要求</th></tr>"
@@ -128,22 +131,41 @@ class LinuxDoBrowser:
 
         html_table += "</table>"
 
-        # 准备推送数据
-        push_data = {
-            "token": PUSHPLUS_TOKEN,
-            "title": "Linux.do 自动签到",
-            "content": html_table,
-            "template": "html"  # 指定使用 HTML 格式
-        }
+        # 发送邮件
+        try:
+            # 创建邮件对象
+            message = MIMEMultipart()
+            message['From'] = Header(SMTP_USER)
+            message['To'] = Header(RECIPIENT_EMAIL)
+            message['Subject'] = Header('Linux.do 自动签到报告', 'utf-8')
 
-        # 发送推送请求到 PushPlus
-        response_pushplus = requests.post(url_pushplus, data=push_data)
+            # 添加HTML内容
+            message.attach(MIMEText(html_table, 'html', 'utf-8'))
+
+            # 连接SMTP服务器并发送邮件
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+                server.starttls()  # 启用TLS加密
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_USER, RECIPIENT_EMAIL, message.as_string())
+            print("邮件发送成功")
+        except Exception as e:
+            print(f"邮件发送失败: {str(e)}")
         
         page.close()
 
 if __name__ == "__main__":
-    if not USERNAME or not PASSWORD:
-        print("Please set USERNAME and PASSWORD")
+    required_env_vars = {
+        "USERNAME": USERNAME,
+        "PASSWORD": PASSWORD,
+        "SMTP_USER": SMTP_USER,
+        "SMTP_PASSWORD": SMTP_PASSWORD,
+        "RECIPIENT_EMAIL": RECIPIENT_EMAIL
+    }
+
+    # 检查必要的环境变量
+    missing_vars = [var for var, value in required_env_vars.items() if not value]
+    if missing_vars:
+        print(f"请设置以下环境变量: {', '.join(missing_vars)}")
         exit(1)
     
     l = LinuxDoBrowser()
